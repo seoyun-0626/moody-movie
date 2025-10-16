@@ -1,9 +1,17 @@
+from flask import Flask, request, jsonify
+from flask_cors import CORS
 import pickle
 import random
-from movie_api import get_movies_by_genre
+from movie_api import get_movies_by_genre  # 이미 있는 함수
 
 # ==========================
-# 감정 분석 모델 불러오기
+# Flask 설정
+# ==========================
+app = Flask(__name__)
+CORS(app)  # 클라이언트 CORS 허용
+
+# ==========================
+# 감정 분석 모델 로드
 # ==========================
 try:
     model = pickle.load(open("emotion_model.pkl", "rb"))
@@ -14,46 +22,16 @@ except Exception as e:
     exit()
 
 # ==========================
-# 사용자 감정 입력
-# ==========================
-user_input = input("\n오늘 기분이 어때? : ").strip()
-if not user_input:
-    print("입력이 비었습니다. 프로그램을 종료합니다.")
-    exit()
-
-# ==========================
-# 감정 예측
-# ==========================
-X = vectorizer.transform([user_input])
-predicted_emotion = model.predict(X)[0]
-probabilities = model.predict_proba(X)[0]  # 확률값 전체
-
-# 감정별 확률 보기
-X = vectorizer.transform([user_input])
-predicted_emotion = model.predict(X)[0]
-probabilities = model.predict_proba(X)[0]  
-
-print(f"\n감정 분석 결과: {predicted_emotion}\n")
-print("=== 감정별 확률 분포 ===")
-for emotion, prob in zip(model.classes_, probabilities):
-    print(f"{emotion}: {prob*100:.2f}%")
-# ==========================
 # 감정 → 장르 매핑
 # ==========================
 emotion_to_genre = {
-    "슬픔": 35,
+    "슬픔": [35,10749, 10751, 18],
     "불안": [16, 10402],
-    "걱정": [16, 10402],
     "스트레스": [16, 10402],
-    "피로": [16, 10402],
     "분노": [80, 27, 53, 9648],
-    "외로움": [10749, 10751, 18],
-    "결핍": [10749, 10751, 18],
     "행복": [28, 12],
-    "설렘": [28, 12],
     "심심": [14, 878],
     "탐구": [99, 36],
-    "호기심": [99, 36]
 }
 
 def get_genre_by_emotion(emotion):
@@ -62,14 +40,41 @@ def get_genre_by_emotion(emotion):
         return random.choice(genres)
     return genres
 
-genre_id = get_genre_by_emotion(predicted_emotion)
-print(f"\n추천 장르 ID: {genre_id}")
+# ==========================
+# 감정 POST 엔드포인트
+# ==========================
+@app.route("/emotion", methods=["POST"])
+def emotion_endpoint():
+    try:
+        data = request.get_json()
+        user_input = data.get("emotion", "").strip()
+        
+        if not user_input:
+            return jsonify({"reply": "감정을 입력해 주세요 😢"}), 400
+
+        # 감정 예측
+        X = vectorizer.transform([user_input])
+        predicted_emotion = model.predict(X)[0]
+
+        # 추천 장르
+        genre_id = get_genre_by_emotion(predicted_emotion)
+
+        # 영화 추천
+        try:
+            movies = get_movies_by_genre(genre_id)
+            movie_list = "\n".join(movies)
+            reply = f"감정 분석 결과: {predicted_emotion}\n추천 영화 리스트:\n{movie_list}"
+        except Exception as e:
+            reply = f"영화 추천 중 오류 발생: {e}"
+
+        return jsonify({"reply": reply})
+
+    except Exception as e:
+        print(e)
+        return jsonify({"reply": "서버에서 오류가 발생했어요 😢"}), 500
 
 # ==========================
-# 영화 추천 출력
+# 서버 실행
 # ==========================
-print("\n=== 추천 영화 리스트 ===\n")
-try:
-    print(get_movies_by_genre(genre_id))
-except Exception as e:
-    print(f"영화 추천 중 오류 발생: {e}")
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)

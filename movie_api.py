@@ -33,17 +33,3 @@ def get_movies_by_genre(genre_id, language="ko-KR"):
     return "\n".join(movies)
 
 
-# 감정별 대표 장르 미리보기
-# print(get_movies_by_genre(35))      # 슬픔 → 코미디
-# print(get_movies_by_genre(16))      # 불안/스트레스/피로 → 애니메이션
-# print(get_movies_by_genre(10402))   # 불안/스트레스/피로 → 음악
-# print(get_movies_by_genre(28))      # 행복/설렘 → 액션
-# print(get_movies_by_genre(12))      # 행복/설렘 → 모험
-# print(get_movies_by_genre(10749))   # 외로움/결핍 → 로맨스
-# print(get_movies_by_genre(18))      # 외로움/결핍 → 드라마
-# print(get_movies_by_genre(14))      # 심심 → 판타지
-# print(get_movies_by_genre(878))     # 심심 → SF
-# print(get_movies_by_genre(99))      # 탐구/호기심 → 다큐
-# print(get_movies_by_genre(36))      # 탐구/호기심 → 역사
-
-

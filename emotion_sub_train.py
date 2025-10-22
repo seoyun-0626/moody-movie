@@ -5,7 +5,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import pickle
 
 # 1. 데이터 불러오기
-df = pd.read_csv("emotion_data.csv", encoding="utf-8-sig")
+df = pd.read_csv("data/emotion_data.csv", encoding="utf-8-sig")
 
 # 2. 대표감정별 세부감정 모델 학습
 models = {}

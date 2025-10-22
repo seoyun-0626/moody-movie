@@ -3,13 +3,63 @@
 <head>
   <meta charset="UTF-8">
   <title>🎬 MoodyMovie</title>
+  <style>
+    body {
+      font-family: "Noto Sans KR", sans-serif;
+      background-color: #fff9fc;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 20px;
+    }
+
+    #chat {
+      width: 420px;
+      height: 420px;
+      overflow-y: auto;
+      border: 2px solid #ffb6c1;
+      border-radius: 15px;
+      background: #fff;
+      padding: 15px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+      line-height: 1.6;
+    }
+
+    #user-input {
+      width: 340px;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      padding: 8px;
+      margin-top: 10px;
+    }
+
+    #send-btn {
+      padding: 8px 16px;
+      margin-left: 5px;
+      border: none;
+      border-radius: 10px;
+      background-color: #ff9ab5;
+      color: white;
+      cursor: pointer;
+    }
+
+    img.poster {
+      width: 120px;
+      border-radius: 10px;
+      margin: 6px 0;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+  </style>
 </head>
 <body>
   <h3>🎬 MoodyMovie 감정 대화</h3>
-  <div id="chat" style="width:420px;height:400px;overflow-y:auto;border:1px solid #aaa;padding:10px;"></div>
+  <div id="chat"></div>
 
-  <input id="user-input" placeholder="메시지를 입력하세요" style="width:340px;">
-  <button id="send-btn">보내기</button>
+  <div style="margin-top:10px;">
+    <input id="user-input" placeholder="메시지를 입력하세요">
+    <button id="send-btn">보내기</button>
+  </div>
 
   <script>
     const chatBox = document.getElementById("chat");
@@ -19,16 +69,23 @@
     let turn = 0;
     let phase = "emotion"; // emotion → after_recommend
 
+    // ✅ HTML에 이미지 자동 포함 (TMDB 포스터 URL 변환)
+    function renderWithImages(text) {
+      const imgRegex = /(https:\/\/image\.tmdb\.org\/t\/p\/w\d+\/[a-zA-Z0-9_.-]+)/g;
+      return text.replace(imgRegex, (url) => `<br><img src="${url}" class="poster">`);
+    }
+
+    // ✅ 메시지 추가 함수 (HTML 렌더링 지원)
     function addMessage(text, who = "bot") {
       const div = document.createElement("div");
-      div.textContent = (who === "user" ? "🧍 " : "🤖 ") + text;
+      div.innerHTML = (who === "user" ? "🧍 " : "🤖 ") + renderWithImages(text);
       chatBox.appendChild(div);
       chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // ✅ 시작하자마자 자동 인사 메시지
+    // ✅ 시작 시 첫 인사
     window.onload = () => {
-      addMessage("너의 기분에 맞는 영화를 추천해줄게! 😊오늘 기분이 어때?");
+      addMessage("너의 기분에 맞는 영화를 추천해줄게! 😊 오늘 기분이 어때?");
     };
 
     async function sendMessage() {
@@ -38,7 +95,6 @@
       addMessage(userText, "user");
       input.value = "";
 
-      // ===== 1️⃣ 감정 대화 단계 =====
       if (phase === "emotion") {
         turn++;
         addMessage("생각 중...", "bot");
@@ -51,53 +107,54 @@
           });
 
           const data = await res.json();
-          chatBox.lastChild.remove();
+          chatBox.lastChild.remove(); // "생각 중..." 제거
+
           addMessage(data.reply, "bot");
 
           if (data.final) {
             addMessage(`🧠 요약: ${data.summary}`, "bot");
             addMessage(`🎭 대표 감정: ${data.emotion}`, "bot");
-            if (data.sub_emotion && data.sub_emotion !== "세부감정 없음")
+            if (data.sub_emotion && data.sub_emotion !== "세부감정 없음") {
               addMessage(`💫 세부 감정: ${data.sub_emotion}`, "bot");
+            }
 
             addMessage("🎥 추천 영화 목록:", "bot");
-            (data.movies || []).forEach(m => addMessage(`- ${m.title}`, "bot"));
+            (data.movies || []).forEach((m, i) => {
+              let msg = `🎬 ${i + 1}. ${m.title}`;
+              if (m.poster) msg += `<br><img src="${m.poster}" class="poster">`;
+              addMessage(msg, "bot");
+            });
 
-            // 다음 단계 전환
             phase = "after_recommend";
             turn = 0;
             addMessage("내가 추천해준 영화가 마음에 들어? 🎬", "bot");
           }
-
         } catch (err) {
           console.error(err);
           addMessage("⚠️ 서버 연결 오류", "bot");
         }
       }
 
-      // ===== 2️⃣ 추천 이후 대화 단계 =====
+      // ✅ 추천 이후 대화 단계
       else if (phase === "after_recommend") {
         addMessage("생각 중...", "bot");
-
         try {
           const res = await fetch("http://127.0.0.1:5000/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               message: userText,
-              turn: "after_recommend"   // ✅ GPT에게 “추천 이후 대화 단계”로 전달
+              turn: "after_recommend"
             })
           });
-
           const data = await res.json();
           chatBox.lastChild.remove();
           addMessage(data.reply, "bot");
-
         } catch (err) {
           console.error(err);
           addMessage("⚠️ 서버 연결 오류", "bot");
         }
-      } 
+      }
     }
 
     sendBtn.addEventListener("click", sendMessage);

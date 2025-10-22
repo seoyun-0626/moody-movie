@@ -1,3 +1,5 @@
+# 영화추천 api
+
 import requests
 import random
 
@@ -62,3 +64,32 @@ if __name__ == "__main__":
         print(m['overview'])
         print(m['poster'])
         print("-" * 50)
+
+
+def get_movie_rating(title, language="ko-KR"):
+    """TMDB에서 영화 제목으로 평점 검색"""
+    url = f"{BASE_URL}/search/movie"
+    params = {
+        "api_key": API_KEY,
+        "language": language,
+        "query": title
+    }
+
+    res = requests.get(url, params=params)
+    if res.status_code != 200:
+        print(f"⚠️ TMDB 검색 오류: {res.status_code}")
+        return None
+
+    data = res.json()
+    results = data.get("results", [])
+    if not results:
+        return None
+
+    movie = results[0]  # 첫 번째 검색 결과 사용
+    return {
+        "title": movie.get("title", "제목 없음"),
+        "rating": movie.get("vote_average", "N/A"),
+        "overview": movie.get("overview", "줄거리 없음"),
+        "poster": f"https://image.tmdb.org/t/p/w500{movie['poster_path']}" if movie.get("poster_path") else None
+    }
+

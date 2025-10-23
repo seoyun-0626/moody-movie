@@ -14,12 +14,11 @@ import pymysql
 # ==========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
-ENV_PATH = r"C:\ai-project\.env"
 
 # ==========================
-# ✅ 환경 변수 로드
+# ✅ 환경 변수 로드 (Railway용)
 # ==========================
-load_dotenv(dotenv_path=ENV_PATH)
+load_dotenv()  # Railway 환경변수 자동 인식
 api_key = os.getenv("OPENAI_API_KEY")
 print(f"🔑 OpenAI Key 불러옴: {api_key[:10]}..." if api_key else "❌ OpenAI Key 불러오기 실패")
 
@@ -32,15 +31,12 @@ app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})
 app.config["JSON_AS_ASCII"] = False
 
-
 class UTF8JSONProvider(DefaultJSONProvider):
     def dumps(self, obj, **kwargs):
         kwargs.setdefault("ensure_ascii", False)
         return json.dumps(obj, **kwargs)
-
     def loads(self, s, **kwargs):
         return json.loads(s, **kwargs)
-
 
 app.json = UTF8JSONProvider(app)
 sys.stdout.reconfigure(encoding="utf-8")
@@ -70,7 +66,6 @@ emotion_to_genre = {
     "심심": [14, 878, 12, 10751],
     "탐구": [99, 36, 18, 37],
 }
-
 
 def get_genre_by_emotion(emotion):
     genres = emotion_to_genre.get(emotion, [18])
@@ -124,7 +119,6 @@ def chat_turn():
         turn = data.get("turn", 1)
         gpt_reply = ""
 
-        # turn 처리
         if isinstance(turn, str):
             if turn == "after_recommend":
                 turn_type = "after_recommend"
@@ -140,7 +134,6 @@ def chat_turn():
         global conversation_history
         conversation_history.append({"role": "user", "content": user_msg})
 
-        # 1~2턴
         if turn_type == "normal" and turn < 3:
             system_prompt = (
                 "너는 감정상담 친구야. "
@@ -159,7 +152,6 @@ def chat_turn():
             conversation_history.append({"role": "assistant", "content": gpt_reply})
             return jsonify({"reply": gpt_reply, "final": False})
 
-        # 추천 이후 대화
         elif turn_type == "after_recommend":
             try:
                 followup_prompt = (
@@ -183,8 +175,8 @@ def chat_turn():
                 )
 
                 gpt_reply = response.choices[0].message.content.strip()
-
                 lower_msg = user_msg.lower()
+
                 if any(word in lower_msg for word in ["평점", "점수", "몇점", "점"]):
                     movie_titles = recommended_movies_memory
                     candidate = None
@@ -207,7 +199,6 @@ def chat_turn():
                 print("❌ after_recommend 오류:", e)
                 return jsonify({"reply": "영화 정보를 불러오는 중 오류가 발생했어요 😢"}), 500
 
-        # 요약 + 감정 분석 + 추천
         summary_prompt = f"""
         다음은 사용자와 감정상담 챗봇의 3턴 대화야:
         {conversation_history}
@@ -236,11 +227,11 @@ def chat_turn():
         genre_id = get_genre_by_emotion(predicted_emotion)
         movies = get_movies_by_genre(genre_id)
         movie_titles = [m["title"] for m in movies if isinstance(m, dict)]
+
         conversation_history.append({
             "role": "assistant",
             "content": f"추천 영화 목록은 {', '.join(movie_titles)}야."
         })
-
         conversation_history.append({
             "role": "assistant",
             "content": "내가 추천해준 영화가 마음에 들어? 🎬"
@@ -267,16 +258,15 @@ def home():
     return send_from_directory(BASE_DIR, "index.html")
 
 # ==========================
-# ✅ DB 연결 및 통계 API
+# ✅ DB 연결 (Railway)
 # ==========================
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-
 def get_connection():
     return pymysql.connect(
-        host="localhost",
-        user="root",
-        password=DB_PASSWORD,
-        db="moodymovie",
+        host=os.getenv("DB_HOST"),
+        port=int(os.getenv("DB_PORT", 3306)),
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        database=os.getenv("DB_NAME"),
         charset="utf8mb4",
         cursorclass=pymysql.cursors.DictCursor,
     )
@@ -314,4 +304,4 @@ def get_top10_movies():
 # ✅ 서버 실행
 # ==========================
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True, use_reloader=True)
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", 5000)))

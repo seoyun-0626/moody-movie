@@ -14,6 +14,7 @@ import pymysql
 # ==========================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
+os.makedirs(MODEL_DIR, exist_ok=True)
 
 # ==========================
 # ✅ 환경 변수 로드 (Railway용)

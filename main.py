@@ -55,7 +55,7 @@ def download_model_if_needed(file_name, file_id):
     file_path = os.path.join(MODEL_DIR, file_name)
     
     # 이미 있고 1MB 이상이면 다시 다운로드하지 않음
-    if os.path.exists(file_path) and os.path.getsize(file_path) > 1024 * 1024:
+    if os.path.exists(file_path):
         print(f"⚡ {file_name} 이미 존재 ({os.path.getsize(file_path) / 1024 / 1024:.2f} MB)")
         return file_path
 

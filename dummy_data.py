@@ -48,7 +48,6 @@ movies = [
 ]
 
 # ⚙️ 현실적인 감정별 분포
-swdwwsasesdaes
 
 values = []
 

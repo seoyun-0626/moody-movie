@@ -8,8 +8,8 @@ import pickle
 # ----------------------------------------------------
 # 1. 데이터 불러오기 + 감정사전 적용
 # ----------------------------------------------------
-df = pd.read_csv("data/emotion_data.csv", encoding="utf-8-sig")
-dict_df = pd.read_csv("data/emotion_dictionary.csv", encoding="utf-8-sig")
+df = pd.read_csv(r"C:\ai-project\moody-movie\data\emotion_data.csv", encoding="utf-8-sig")
+dict_df = pd.read_csv(r"C:\ai-project\moody-movie\data\emotion_dictionary.csv", encoding="utf-8-sig")
 
 # 감정사전 딕셔너리화
 emotion_dict = {}
@@ -19,21 +19,32 @@ for _, row in dict_df.iterrows():
     if word:
         emotion_dict.setdefault(emotion, []).append(word)
 
-# 감정사전 매칭 함수
 def match_emotion(text):
     if pd.isna(text):
         return None
+
+    text = str(text)
+    found = []
+
+    # 모든 감정 단어를 순회하며 매칭된 감정 수집
     for emotion, words in emotion_dict.items():
         for w in words:
-            if w in str(text):
-                return emotion
+            if w in text:
+                found.append(emotion)
+
+    # 여러 감정이 매칭되면 가장 많이 등장한 감정을 반환
+    if found:
+        return max(set(found), key=found.count)
     return None
 
-# 각 문장에 대해 감정사전 기반 감정 찾기
 df["사전감정"] = df["대화"].apply(match_emotion)
+df["대표감정"] = df["대표감정"]
 
-# 사전감정이 있으면 대표감정을 그걸로 덮어쓰기
-df["대표감정"] = df["사전감정"].fillna(df["대표감정"])
+df["입력문장"] = df.apply(
+    lambda r: f"(참고감정:{r['사전감정']}) {r['대화']}"
+    if pd.notna(r["사전감정"]) else r["대화"],
+    axis=1
+)
 
 # ----------------------------------------------------
 # 2. 사전감정을 학습에 포함하기 (핵심)
@@ -98,17 +109,24 @@ print(classification_report(y_test, y_pred))
 print("=" * 60)
 
 # 모델 저장
-pickle.dump(et_model, open("models/emotion_model.pkl", "wb"))
-pickle.dump(vectorizer, open("models/vectorizer.pkl", "wb"))
+pickle.dump(et_model, open("C:/ai-project/moody-movie/models/emotion_model.pkl", "wb"))
+pickle.dump(vectorizer, open("C:/ai-project/moody-movie/models/vectorizer.pkl", "wb"))
+
 
 # =========================================
 # (2) 세부감정 모델 학습
 # =========================================
 print("\n세부감정 모델 학습 시작...")
 
+# ⚠️ 2개 미만 세부감정 제외 (train_test_split 에러 방지)
+sub_label_counts = df["세부감정"].value_counts()
+valid_sub_labels = sub_label_counts[sub_label_counts >= 2].index
+df_sub = df[df["세부감정"].isin(valid_sub_labels)]
+
 # 세부감정용 데이터 분리
 X_train_sub, X_test_sub, y_train_sub, y_test_sub = train_test_split(
-    texts, sub_labels, test_size=0.2, random_state=42, stratify=sub_labels
+    df_sub["입력문장"], df_sub["세부감정"],
+    test_size=0.2, random_state=42, stratify=df_sub["세부감정"]
 )
 
 # 기존 TF-IDF 벡터 변환기 재사용 (❗fit 금지, transform만 사용)
@@ -138,8 +156,9 @@ print(classification_report(y_test_sub, sub_pred))
 print("=" * 60)
 
 # 모델 저장 (두 모델 공용 벡터 변환기 포함)
-pickle.dump(sub_et_model, open("models/emotion_sub_model.pkl", "wb"))
-pickle.dump(vectorizer, open("models/sub_vectorizers.pkl", "wb"))
+pickle.dump(sub_et_model, open("C:/ai-project/moody-movie/models/emotion_sub_model.pkl", "wb"))
+pickle.dump(vectorizer, open("C:/ai-project/moody-movie/models/sub_vectorizers.pkl", "wb"))
+
 # ----------------------------------------------------
 # ✅ 아래는 실험 기록용 (모델 비교 및 최적화 시도 내역)
 # ----------------------------------------------------

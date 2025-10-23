@@ -5,7 +5,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 import pickle
 
 # 1. 데이터 불러오기
-df = pd.read_csv("data/emotion_data.csv", encoding="utf-8-sig")
+df = pd.read_csv(r"C:\ai-project\moody-movie\data\emotion_data.csv", encoding="utf-8-sig")
 
 # 2. 대표감정별 세부감정 모델 학습
 models = {}
@@ -42,6 +42,6 @@ for main_emotion in df["대표감정"].unique():
     print(f"[{main_emotion}] 세부감정 모델 학습 완료")
 
 # 3. 모델 저장
-pickle.dump(models, open("sub_models.pkl", "wb"))
-pickle.dump(vectorizers, open("sub_vectorizers.pkl", "wb"))
-print("세부감정 모델 전부 저장 완료 ")
+pickle.dump(models, open(r"C:\ai-project\moody-movie\models\emotion_sub_model.pkl", "wb"))
+pickle.dump(vectorizers, open(r"C:\ai-project\moody-movie\models\sub_vectorizers.pkl", "wb"))
+print("세부감정 모델 전부 저장 완료 ✅")

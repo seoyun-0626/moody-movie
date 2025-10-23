@@ -9,16 +9,21 @@ from dotenv import load_dotenv
 import os
 import pymysql
 
+# ==========================
+# ✅ 절대경로 기본 설정
+# ==========================
+BASE_DIR = r"C:\ai-project\moody-movie"
+MODEL_DIR = os.path.join(BASE_DIR, "models")
+ENV_PATH = r"C:\ai-project\.env"
 
 # ==========================
 # ✅ 환경 변수 로드
 # ==========================
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
+load_dotenv(dotenv_path=ENV_PATH)
 api_key = os.getenv("OPENAI_API_KEY")
-print(f"🔑 OpenAI Key 불러옴: {api_key[:10]}...")
+print(f"🔑 OpenAI Key 불러옴: {api_key[:10]}..." if api_key else "❌ OpenAI Key 불러오기 실패")
 
 client = OpenAI(api_key=api_key)
-
 
 # ==========================
 # ✅ Flask 설정
@@ -40,20 +45,18 @@ class UTF8JSONProvider(DefaultJSONProvider):
 app.json = UTF8JSONProvider(app)
 sys.stdout.reconfigure(encoding="utf-8")
 
-
 # ==========================
 # ✅ 감정 분석 모델 로드
 # ==========================
 try:
-    model = pickle.load(open("models/emotion_model.pkl", "rb"))
-    sub_model = pickle.load(open("models/emotion_sub_model.pkl", "rb"))
-    vectorizer = pickle.load(open("models/vectorizer.pkl", "rb"))
-    sub_vectorizer = pickle.load(open("models/sub_vectorizers.pkl", "rb"))
+    model = pickle.load(open(os.path.join(MODEL_DIR, "emotion_model.pkl"), "rb"))
+    sub_model = pickle.load(open(os.path.join(MODEL_DIR, "emotion_sub_model.pkl"), "rb"))
+    vectorizer = pickle.load(open(os.path.join(MODEL_DIR, "vectorizer.pkl"), "rb"))
+    sub_vectorizer = pickle.load(open(os.path.join(MODEL_DIR, "sub_vectorizers.pkl"), "rb"))
     print("✅ 감정 분석 모델 및 세부감정 모델 로드 완료")
 except Exception as e:
     print(f"❌ 모델 로드 중 오류 발생: {e}")
     exit()
-
 
 # ==========================
 # ✅ 감정 → 장르 매핑
@@ -72,7 +75,6 @@ emotion_to_genre = {
 def get_genre_by_emotion(emotion):
     genres = emotion_to_genre.get(emotion, [18])
     return random.choice(genres)
-
 
 # ==========================
 # ✅ /emotion 엔드포인트
@@ -108,12 +110,11 @@ def emotion_endpoint():
         print("❌ /emotion 오류:", e)
         return jsonify({"reply": "서버에서 오류가 발생했어요"}), 500
 
-
 # ==========================
 # ✅ /chat 엔드포인트 (3턴 대화)
 # ==========================
 conversation_history = []
-
+recommended_movies_memory = []
 
 @app.route("/chat", methods=["POST"])
 def chat_turn():
@@ -123,7 +124,7 @@ def chat_turn():
         turn = data.get("turn", 1)
         gpt_reply = ""
 
-        # 문자열/숫자 구분
+        # turn 처리
         if isinstance(turn, str):
             if turn == "after_recommend":
                 turn_type = "after_recommend"
@@ -139,12 +140,13 @@ def chat_turn():
         global conversation_history
         conversation_history.append({"role": "user", "content": user_msg})
 
-        # ✅ 1~2턴 대화
+        # 1~2턴
         if turn_type == "normal" and turn < 3:
             system_prompt = (
                 "너는 감정상담 친구야. "
                 "사용자의 말을 따뜻하게 공감하면서 짧게 답하고, "
                 "반드시 마지막에 질문을 하나 덧붙여."
+                "사용자와 너가 한말을 모두 기억해"
             )
             response = client.chat.completions.create(
                 model="gpt-4o-mini",
@@ -157,113 +159,55 @@ def chat_turn():
             conversation_history.append({"role": "assistant", "content": gpt_reply})
             return jsonify({"reply": gpt_reply, "final": False})
 
-        # ✅ 추천 이후 대화
+        # 추천 이후 대화
         elif turn_type == "after_recommend":
-            user_text = user_msg.strip().lower().replace(" ", "")
-
             try:
-                import re
-                from difflib import SequenceMatcher
+                followup_prompt = (
+                    "너는 감정 기반 영화 추천 친구야. "
+                    "지금까지의 대화와 추천한 영화들을 전부 기억하고 있어. "
+                    "사용자가 영화 제목 일부나 번호(1, 2, 3번)만 말해도 어떤 영화를 의미하는지 알아들어야 해. "
+                    "‘그거’, ‘이거’, ‘마지막꺼’, ‘첫번째꺼’ 같은 표현도 이해해. "
+                    "사용자가 평점이나 줄거리, 배우, 분위기 등을 물으면 자연스럽게 설명해줘. "
+                    "응답은 짧고 자연스럽게, 친구처럼 따뜻하게 대화해."
+                    "동일한 영화의 평점을 여러번 얘기하지 마"
+                    "바로 전 대화와 자연스럽게 이어지게 대화해"
+                )
 
-                movie_name = None
-                titles = []
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": followup_prompt},
+                        *conversation_history,
+                        {"role": "user", "content": user_msg},
+                    ],
+                )
 
-                # 🔍 최근 추천 영화 목록 찾기
-                for past in reversed(conversation_history):
-                    if "추천 영화 목록은" in past.get("content", ""):
-                        titles = (
-                            past["content"]
-                            .replace("추천 영화 목록은", "")
-                            .replace("야.", "")
-                            .replace("야", "")
-                            .strip()
-                            .split(",")
-                        )
-                        break
+                gpt_reply = response.choices[0].message.content.strip()
 
-                # 1️⃣ 번호 언급
-                num_match = re.search(r"(\d+)", user_text)
-                if num_match and titles:
-                    idx = int(num_match.group(1)) - 1
-                    if 0 <= idx < len(titles):
-                        movie_name = titles[idx].strip()
-
-                elif any(w in user_text for w in ["마지막", "끝", "뒤"]) and titles:
-                    movie_name = titles[-1].strip()
-
-                elif any(w in user_text for w in ["첫", "처음"]) and titles:
-                    movie_name = titles[0].strip()
-
-                # 2️⃣ 제목 일부 매칭
-                def normalize(s):
-                    return re.sub(r"[^가-힣a-z0-9]", "", s.lower())
-
-                if not movie_name:
-                    for t in titles:
-                        norm_t = normalize(t)
-                        if norm_t in user_text or user_text in norm_t:
-                            movie_name = t.strip()
+                lower_msg = user_msg.lower()
+                if any(word in lower_msg for word in ["평점", "점수", "몇점", "점"]):
+                    movie_titles = recommended_movies_memory
+                    candidate = None
+                    for title in movie_titles:
+                        if title.lower().replace(" ", "") in lower_msg:
+                            candidate = title.strip()
                             break
+                    if not candidate and movie_titles:
+                        candidate = movie_titles[0].strip()
 
-                # 3️⃣ 유사도 기반
-                if not movie_name and titles:
-                    scores = []
-                    for t in titles:
-                        ratio = SequenceMatcher(None, normalize(t), user_text).ratio()
-                        scores.append((ratio, t))
-                    best_match = max(scores, key=lambda x: x[0])
-                    if best_match[0] > 0.45:
-                        movie_name = best_match[1].strip()
+                    if candidate:
+                        result = get_movie_rating(candidate)
+                        if result:
+                            gpt_reply += f"\n🎬 '{result['title']}'의 TMDB 평점은 {result['rating']}점이에요!"
+                        else:
+                            gpt_reply += f"\n'{candidate}'의 평점을 찾지 못했어요 😢"
 
-                # 4️⃣ 직전 assistant 발화에서 확인
-                if not movie_name:
-                    for past in reversed(conversation_history):
-                        if past.get("role") == "assistant":
-                            for t in titles:
-                                if normalize(t) in normalize(past.get("content", "")):
-                                    movie_name = t.strip()
-                                    break
-                        if movie_name:
-                            break
-
-                # 5️⃣ fallback
-                if not movie_name and titles:
-                    movie_name = titles[0].strip()
-
-                if not movie_name:
-                    return jsonify({"reply": "어떤 영화 이야기인지 잘 모르겠어요 😢"})
-
-                # 🎯 평점 관련 질문
-                if any(w in user_text for w in ["평점", "점수", "몇점", "점"]):
-                    result = get_movie_rating(movie_name)
-                    if result:
-                        reply_text = f"🎬 '{result['title']}'의 TMDB 평점은 {result['rating']}점이에요!"
-                        if result["poster"]:
-                            reply_text += f"\n🎞️ 포스터: {result['poster']}"
-                    else:
-                        reply_text = f"'{movie_name}'의 평점을 찾지 못했어요 😢"
-                    return jsonify({"reply": reply_text})
-
-                # 🎬 영화 설명 응답
-                result = get_movie_rating(movie_name)
-                if result:
-                    reply_text = (
-                        f"🎬 '{result['title']}'은(는) 이런 영화예요!\n"
-                        f"📖 줄거리: {result['overview']}\n"
-                        f"⭐ TMDB 평점: {result['rating']}점"
-                    )
-                    if result["poster"]:
-                        reply_text += f"\n🎞️ 포스터: {result['poster']}"
-                else:
-                    reply_text = f"'{movie_name}'에 대한 정보를 찾지 못했어요 😢"
-
-                return jsonify({"reply": reply_text})
-
+                return jsonify({"reply": gpt_reply})
             except Exception as e:
                 print("❌ after_recommend 오류:", e)
                 return jsonify({"reply": "영화 정보를 불러오는 중 오류가 발생했어요 😢"}), 500
 
-        # ✅ 요약 + 감정 분석 + 추천
+        # 요약 + 감정 분석 + 추천
         summary_prompt = f"""
         다음은 사용자와 감정상담 챗봇의 3턴 대화야:
         {conversation_history}
@@ -280,10 +224,8 @@ def chat_turn():
         summary_text = summary_response.choices[0].message.content.strip()
         print("🧠 대화 요약문:", summary_text.encode("utf-8", "ignore").decode("utf-8"))
 
-        # 감정 분석
         X = vectorizer.transform([summary_text])
         predicted_emotion = model.predict(X)[0]
-
         try:
             X_sub = sub_vectorizer.transform([summary_text])
             predicted_sub = sub_model.predict(X_sub)[0]
@@ -293,11 +235,15 @@ def chat_turn():
 
         genre_id = get_genre_by_emotion(predicted_emotion)
         movies = get_movies_by_genre(genre_id)
-
         movie_titles = [m["title"] for m in movies if isinstance(m, dict)]
         conversation_history.append({
             "role": "assistant",
             "content": f"추천 영화 목록은 {', '.join(movie_titles)}야."
+        })
+
+        conversation_history.append({
+            "role": "assistant",
+            "content": "내가 추천해준 영화가 마음에 들어? 🎬"
         })
 
         return jsonify({
@@ -313,20 +259,17 @@ def chat_turn():
         print("❌ /chat 오류:", e)
         return jsonify({"reply": "서버 오류 발생"}), 500
 
-
 # ==========================
 # ✅ HTML 연결
 # ==========================
 @app.route("/")
 def home():
-    return send_from_directory(".", "index.html")
-
+    return send_from_directory(BASE_DIR, "index.html")
 
 # ==========================
 # ✅ DB 연결 및 통계 API
 # ==========================
 DB_PASSWORD = os.getenv("DB_PASSWORD")
-
 
 def get_connection():
     return pymysql.connect(
@@ -337,7 +280,6 @@ def get_connection():
         charset="utf8mb4",
         cursorclass=pymysql.cursors.DictCursor,
     )
-
 
 @app.route("/stats")
 def get_stats():
@@ -353,7 +295,6 @@ def get_stats():
     conn.close()
     return jsonify(result)
 
-
 @app.route("/top10")
 def get_top10_movies():
     conn = get_connection()
@@ -368,7 +309,6 @@ def get_top10_movies():
     result = cursor.fetchall()
     conn.close()
     return jsonify(result)
-
 
 # ==========================
 # ✅ 서버 실행

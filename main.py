@@ -58,8 +58,7 @@ def download_model_if_needed(file_name, file_id):
         return file_path
 
     print(f"📦 {file_name} 다운로드 중...")
-    url = f"https://drive.google.com/uc?id={file_id}"
-    gdown.download(url, file_path, quiet=False)
+    gdown.download(id=file_id, output=file_path, quiet=False, fuzzy=True)
     print(f"✅ {file_name} 다운로드 완료")
     return file_path
 

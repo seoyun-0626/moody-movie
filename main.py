@@ -53,13 +53,22 @@ import gdown
 # ==========================
 def download_model_if_needed(file_name, file_id):
     file_path = os.path.join(MODEL_DIR, file_name)
-    if os.path.exists(file_path):
-        print(f"⚡ {file_name} 이미 존재")
-        return file_path
 
-    print(f"📦 {file_name} 다운로드 중...")
-    gdown.download(id=file_id, output=file_path, quiet=False, fuzzy=True)
-    print(f"✅ {file_name} 다운로드 완료")
+    # 파일이 존재하지만 1MB 미만이면 다시 다운로드
+    if os.path.exists(file_path) and os.path.getsize(file_path) > 1024 * 1024:
+        print(f"⚡ {file_name} 이미 존재 ({os.path.getsize(file_path) / 1024 / 1024:.2f} MB)")
+        return file_path
+    else:
+        print(f"📦 {file_name} 새로 다운로드 중...")
+
+    # 확실한 구글 드라이브 다운로드 (HTML 우회)
+    os.system(f"gdown --id {file_id} -O {file_path} --fuzzy")
+
+    # 다운로드 확인
+    if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
+        print(f"✅ {file_name} 다운로드 완료 ({os.path.getsize(file_path) / 1024 / 1024:.2f} MB)")
+    else:
+        print(f"❌ {file_name} 다운로드 실패: 파일이 비어 있음")
     return file_path
 
 

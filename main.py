@@ -44,6 +44,39 @@ sys.stdout.reconfigure(encoding="utf-8")
 # ==========================
 # ✅ 감정 분석 모델 로드
 # ==========================
+import requests
+
+# ==========================
+# ✅ 대용량 모델 자동 다운로드 (Google Drive)
+# ==========================
+def download_model_if_needed(file_name, url):
+    file_path = os.path.join(MODEL_DIR, file_name)
+    if not os.path.exists(file_path):
+        print(f"📦 {file_name} 다운로드 중...")
+        with requests.get(url, stream=True) as r:
+            r.raise_for_status()
+            with open(file_path, "wb") as f:
+                for chunk in r.iter_content(chunk_size=8192):
+                    f.write(chunk)
+        print(f"✅ {file_name} 다운로드 완료")
+    else:
+        print(f"⚡ {file_name} 이미 존재")
+    return file_path
+
+model_urls = {
+    "emotion_model.pkl": "https://drive.google.com/uc?export=download&id=178MNrRjZhLa4nr1R50bXn8zN01d_csqR",
+    "emotion_sub_model.pkl": "https://drive.google.com/uc?export=download&id=1Bcv48VMyYbqgPdpSfGfzr7pkXSw2pgSk",
+    "sub_models.pkl": "https://drive.google.com/uc?export=download&id=11W8C6wi8NT_erhK6HIR5gD5RZTLbssQ7",
+    "sub_vectorizers.pkl": "https://drive.google.com/uc?export=download&id=1H5lTOkykqgMr4QTYp1Q8JRHs5peVLJ-O",
+    "vectorizer.pkl": "https://drive.google.com/uc?export=download&id=1yTW-28JTKym2VLzchzdjlGhGP9F1krAC"
+}
+
+for name, url in model_urls.items():
+    download_model_if_needed(name, url)
+
+# ==========================
+# ✅ 모델 로드
+# ==========================
 try:
     model = pickle.load(open(os.path.join(MODEL_DIR, "emotion_model.pkl"), "rb"))
     sub_model = pickle.load(open(os.path.join(MODEL_DIR, "emotion_sub_model.pkl"), "rb"))

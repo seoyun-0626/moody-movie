@@ -52,17 +52,29 @@ import requests
 # ==========================
 def download_model_if_needed(file_name, url):
     file_path = os.path.join(MODEL_DIR, file_name)
-    if not os.path.exists(file_path):
-        print(f"📦 {file_name} 다운로드 중...")
-        with requests.get(url, stream=True) as r:
-            r.raise_for_status()
-            with open(file_path, "wb") as f:
-                for chunk in r.iter_content(chunk_size=8192):
-                    f.write(chunk)
-        print(f"✅ {file_name} 다운로드 완료")
-    else:
+    if os.path.exists(file_path):
         print(f"⚡ {file_name} 이미 존재")
+        return file_path
+
+    print(f"📦 {file_name} 다운로드 중...")
+
+    # ✅ Google Drive 대용량 파일 다운로드 처리
+    session = requests.Session()
+    response = session.get(url, stream=True)
+    for key, value in response.cookies.items():
+        if key.startswith("download_warning"):
+            url = url + "&confirm=" + value
+            response = session.get(url, stream=True)
+            break
+
+    with open(file_path, "wb") as f:
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+
+    print(f"✅ {file_name} 다운로드 완료")
     return file_path
+
 
 model_urls = {
     "emotion_model.pkl": "https://drive.google.com/uc?export=download&id=178MNrRjZhLa4nr1R50bXn8zN01d_csqR",

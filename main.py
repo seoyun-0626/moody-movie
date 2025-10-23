@@ -12,7 +12,7 @@ import pymysql
 # ==========================
 # ✅ 절대경로 기본 설정
 # ==========================
-BASE_DIR = r"C:\ai-project\moody-movie"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_DIR = os.path.join(BASE_DIR, "models")
 ENV_PATH = r"C:\ai-project\.env"
 
